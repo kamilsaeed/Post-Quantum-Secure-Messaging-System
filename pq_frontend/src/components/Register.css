@@ -1,0 +1,204 @@
+/* Register.css */
+
+.register-wrapper {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    position: relative;
+    overflow: hidden;
+    background: var(--bg-primary);
+}
+
+.register-glow {
+    position: absolute;
+    border-radius: 50%;
+    filter: blur(80px);
+    pointer-events: none;
+}
+.register-glow-1 {
+    width: 500px;
+    height: 500px;
+    background: radial-gradient(circle, rgba(124, 58, 237, 0.15) 0%, transparent 70%);
+    top: -100px;
+    left: -150px;
+}
+.register-glow-2 {
+    width: 400px;
+    height: 400px;
+    background: radial-gradient(circle, rgba(6, 182, 212, 0.1) 0%, transparent 70%);
+    bottom: -100px;
+    right: -100px;
+}
+
+.register-container {
+    width: 100%;
+    max-width: 480px;
+    background: var(--gradient-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-xl);
+    padding: 40px;
+    box-shadow: var(--shadow-lg), 0 0 60px rgba(124, 58, 237, 0.08);
+    position: relative;
+    z-index: 1;
+}
+
+.register-header {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 24px;
+}
+
+.register-logo {
+    flex-shrink: 0;
+    animation: floatGlow 3s ease-in-out infinite;
+}
+
+.register-title {
+    font-size: 28px;
+    font-weight: 700;
+    background: var(--gradient-primary);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    margin: 0;
+    line-height: 1.2;
+}
+
+.register-subtitle {
+    font-size: 13px;
+    color: var(--text-muted);
+    margin-top: 4px;
+}
+
+.register-badges {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-bottom: 20px;
+}
+
+.register-description {
+    font-size: 14px;
+    color: var(--text-secondary);
+    line-height: 1.6;
+    margin-bottom: 28px;
+    padding: 14px 16px;
+    background: var(--accent-subtle);
+    border: 1px solid var(--accent-glow);
+    border-radius: var(--radius-md);
+}
+.register-description strong {
+    color: #a78bfa;
+}
+
+.register-form {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    margin-bottom: 20px;
+}
+
+.form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.form-label {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+}
+
+/* Status messages */
+.register-status {
+    padding: 12px 16px;
+    border-radius: var(--radius-md);
+    font-size: 13px;
+    font-weight: 500;
+    margin-bottom: 16px;
+    line-height: 1.5;
+}
+.register-status-info {
+    background: var(--cyan-subtle);
+    border: 1px solid rgba(6, 182, 212, 0.3);
+    color: var(--cyan);
+}
+.register-status-success {
+    background: var(--green-subtle);
+    border: 1px solid rgba(16, 185, 129, 0.3);
+    color: var(--green);
+}
+.register-status-error {
+    background: var(--red-subtle);
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    color: var(--red);
+}
+
+/* Key preview panel */
+.key-preview {
+    background: var(--bg-primary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    padding: 14px 16px;
+    margin-bottom: 16px;
+}
+.key-preview-title {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 10px;
+}
+.key-preview-item {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    margin-bottom: 10px;
+}
+.key-preview-item:last-child {
+    margin-bottom: 0;
+}
+.key-preview-label {
+    font-size: 11px;
+    color: var(--text-muted);
+    font-family: var(--font-mono);
+}
+.key-preview-value {
+    font-size: 11px;
+    color: var(--cyan);
+    word-break: break-all;
+    background: var(--bg-input);
+    padding: 6px 8px;
+    border-radius: var(--radius-sm);
+    display: block;
+    font-family: var(--font-mono);
+}
+
+/* Threat model note */
+.register-threat-note {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    font-size: 12px;
+    color: var(--text-muted);
+    line-height: 1.5;
+    padding: 10px 14px;
+    background: var(--bg-secondary);
+    border-radius: var(--radius-md);
+    border-left: 3px solid var(--accent-primary);
+}
+.register-threat-note svg {
+    color: var(--accent-primary);
+    flex-shrink: 0;
+    margin-top: 1px;
+}

@@ -1,0 +1,509 @@
+/* Chat.css */
+
+/* ============================================================
+   Layout
+   ============================================================ */
+.chat-layout {
+    display: flex;
+    height: 100vh;
+    overflow: hidden;
+    background: var(--bg-primary);
+}
+
+/* ============================================================
+   Sidebar
+   ============================================================ */
+.chat-sidebar {
+    width: 280px;
+    min-width: 280px;
+    display: flex;
+    flex-direction: column;
+    background: var(--bg-secondary);
+    border-right: 1px solid var(--border);
+    overflow: hidden;
+}
+
+.sidebar-header {
+    padding: 20px 16px;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+}
+
+.sidebar-logo {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 20px;
+}
+
+.sidebar-app-name {
+    font-size: 18px;
+    font-weight: 700;
+    letter-spacing: -0.5px;
+}
+
+.sidebar-user-info {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px;
+    background: var(--bg-hover);
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border);
+    margin-bottom: 12px;
+}
+
+.sidebar-avatar {
+    width: 38px;
+    height: 38px;
+    border-radius: var(--radius-md);
+    background: var(--gradient-primary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    font-weight: 700;
+    color: white;
+    flex-shrink: 0;
+}
+
+.sidebar-username {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.sidebar-status {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    color: var(--green);
+    margin-top: 3px;
+}
+
+.sidebar-alg-badges {
+    display: flex;
+    gap: 6px;
+}
+
+.sidebar-section-title {
+    padding: 12px 16px 8px;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    flex-shrink: 0;
+}
+
+/* Contact List */
+.contact-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 4px 8px;
+}
+
+.contact-empty {
+    padding: 24px 16px;
+    text-align: center;
+    color: var(--text-muted);
+    font-size: 13px;
+    line-height: 1.6;
+}
+.contact-empty small {
+    color: var(--text-muted);
+    opacity: 0.7;
+}
+
+.contact-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px;
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    transition: background var(--transition-fast);
+    position: relative;
+}
+.contact-item:hover {
+    background: var(--bg-hover);
+}
+.contact-item-active {
+    background: var(--accent-subtle) !important;
+    border: 1px solid var(--accent-glow);
+}
+
+.contact-avatar {
+    width: 42px;
+    height: 42px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #4c1d95, #0e7490);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    font-weight: 700;
+    color: white;
+    flex-shrink: 0;
+    position: relative;
+}
+
+.contact-secure-dot {
+    position: absolute;
+    bottom: 0;
+    right: 0;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: var(--green);
+    border: 2px solid var(--bg-secondary);
+}
+
+.contact-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.contact-name {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.contact-hs-status {
+    margin-top: 3px;
+}
+
+.hs-badge {
+    font-size: 11px;
+    font-weight: 500;
+    padding: 2px 6px;
+    border-radius: var(--radius-full);
+}
+.hs-none { color: var(--text-muted); }
+.hs-pending { color: var(--amber); }
+.hs-done { color: var(--green); }
+
+.unread-badge {
+    background: var(--accent-primary);
+    color: white;
+    font-size: 11px;
+    font-weight: 700;
+    min-width: 20px;
+    height: 20px;
+    border-radius: var(--radius-full);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 5px;
+}
+
+/* Sidebar Footer */
+.sidebar-footer {
+    padding: 12px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    flex-shrink: 0;
+}
+
+/* ============================================================
+   Main Chat Area
+   ============================================================ */
+.chat-main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+/* Empty state */
+.chat-empty-state {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 40px;
+    text-align: center;
+    gap: 16px;
+}
+.chat-empty-icon {
+    width: 100px;
+    height: 100px;
+    border-radius: 50%;
+    background: var(--accent-subtle);
+    border: 1px solid var(--accent-glow);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--accent-primary);
+    margin-bottom: 8px;
+    animation: floatGlow 3s ease-in-out infinite;
+}
+.chat-empty-state h2 {
+    font-size: 22px;
+    background: var(--gradient-primary);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+.chat-empty-state p {
+    color: var(--text-secondary);
+    font-size: 14px;
+    max-width: 400px;
+}
+.chat-empty-badges {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    justify-content: center;
+    margin-top: 8px;
+}
+
+/* Chat Header */
+.chat-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 24px;
+    background: var(--bg-secondary);
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+}
+.chat-header-contact {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+.chat-header-avatar {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    background: var(--gradient-primary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    font-weight: 700;
+    color: white;
+}
+.chat-header-name {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+.chat-header-status {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: var(--text-secondary);
+    margin-top: 3px;
+}
+.chat-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+/* Messages */
+.messages-container {
+    flex: 1;
+    overflow-y: auto;
+    padding: 20px 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+.messages-loading,
+.messages-empty {
+    text-align: center;
+    color: var(--text-muted);
+    font-size: 14px;
+    margin: auto;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.message-row {
+    display: flex;
+    animation: fadeIn 0.2s ease forwards;
+}
+.message-row-mine {
+    justify-content: flex-end;
+}
+.message-row-theirs {
+    justify-content: flex-start;
+}
+
+.message-bubble {
+    max-width: 65%;
+    padding: 12px 16px;
+    border-radius: 16px;
+    position: relative;
+}
+.message-bubble-mine {
+    background: linear-gradient(135deg, #5b21b6, #7c3aed);
+    color: white;
+    border-bottom-right-radius: 4px;
+}
+.message-bubble-theirs {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    color: var(--text-primary);
+    border-bottom-left-radius: 4px;
+}
+
+.message-text {
+    font-size: 14px;
+    line-height: 1.5;
+    word-break: break-word;
+}
+.message-encrypted {
+    color: var(--text-muted);
+    font-style: italic;
+    font-size: 13px;
+}
+
+.message-meta {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 6px;
+}
+.message-time {
+    font-size: 11px;
+    opacity: 0.7;
+}
+.message-sig {
+    font-size: 10px;
+    font-weight: 600;
+    padding: 1px 6px;
+    border-radius: var(--radius-full);
+    font-family: var(--font-mono);
+}
+.sig-valid {
+    background: rgba(16, 185, 129, 0.15);
+    color: var(--green);
+}
+.sig-invalid {
+    background: rgba(239, 68, 68, 0.15);
+    color: var(--red);
+}
+
+/* Message Input */
+.message-input-area {
+    padding: 16px 24px;
+    border-top: 1px solid var(--border);
+    background: var(--bg-secondary);
+    flex-shrink: 0;
+}
+.message-input-wrapper {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+}
+.message-input {
+    border-radius: var(--radius-full) !important;
+}
+.send-btn {
+    width: 42px !important;
+    height: 42px !important;
+    border-radius: 50% !important;
+    flex-shrink: 0;
+    padding: 0 !important;
+}
+.message-input-hint {
+    font-size: 11px;
+    color: var(--text-muted);
+    text-align: center;
+    margin-top: 8px;
+}
+
+/* ============================================================
+   Crypto Activity Panel
+   ============================================================ */
+.crypto-panel {
+    width: 340px;
+    min-width: 340px;
+    background: var(--bg-secondary);
+    border-left: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+@keyframes slideInRight {
+    from { transform: translateX(100%); opacity: 0; }
+    to { transform: translateX(0); opacity: 1; }
+}
+.animate-slide-in-right {
+    animation: slideInRight 0.25s ease forwards;
+}
+
+.crypto-panel-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 16px 16px 8px;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+}
+.crypto-panel-header h3 {
+    flex: 1;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.crypto-panel-subtitle {
+    padding: 8px 16px 12px;
+    font-size: 11px;
+    color: var(--text-muted);
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+}
+
+.crypto-log {
+    flex: 1;
+    overflow-y: auto;
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.crypto-log-empty {
+    color: var(--text-muted);
+    font-size: 13px;
+    text-align: center;
+    padding: 24px;
+}
+
+.crypto-log-entry {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 8px 10px;
+    background: var(--bg-primary);
+    border-radius: var(--radius-sm);
+    border-left: 2px solid var(--border);
+}
+.crypto-log-time {
+    font-size: 10px;
+    color: var(--text-muted);
+    font-family: var(--font-mono);
+}
+.crypto-log-msg {
+    font-size: 12px;
+    line-height: 1.4;
+    font-family: var(--font-mono);
+    word-break: break-word;
+}

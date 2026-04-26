@@ -1,0 +1,80 @@
+/* App.css */
+
+/* ============================================================
+   App Root
+   ============================================================ */
+.app-root {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    background: var(--bg-primary);
+}
+
+/* ============================================================
+   Loading Screen
+   ============================================================ */
+.app-loading {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    color: var(--text-muted);
+    font-size: 14px;
+    background: var(--bg-primary);
+}
+
+/* ============================================================
+   Top Navigation Bar (visible only when logged in)
+   ============================================================ */
+.app-nav {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 20px;
+    height: 52px;
+    background: var(--bg-secondary);
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+    z-index: 100;
+    position: relative;
+}
+
+.app-nav-left {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+}
+
+.app-nav-logo {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.app-nav-title {
+    font-size: 16px;
+    font-weight: 700;
+    background: var(--gradient-primary);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    letter-spacing: -0.3px;
+}
+
+.app-nav-right {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+/* ============================================================
+   Main Content Area
+   ============================================================ */
+.app-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
