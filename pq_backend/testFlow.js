@@ -23,7 +23,8 @@ async function runTest() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 username: `test_user_${Date.now()}`, // Dynamic username to avoid duplicates in DB
-                dilithiumPublicKey: userBDilithium.publicKey
+                dilithiumPublicKey: userBDilithium.publicKey,
+                kyberPublicKey: userBKyber.publicKey  // M1 fix: was missing, causing HTTP 400
             })
         });
         const registerData = await registerRes.json();

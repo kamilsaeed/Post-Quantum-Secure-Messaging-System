@@ -19,12 +19,17 @@ const MessageSchema = new mongoose.Schema({
         type: String,
         required: true
     },
-    // AES-GCM initialization vector (base64)
+    // AES-GCM initialization vector (base64).
+    // Unique index enforces replay protection (C3): an attacker replaying
+    // an identical (ciphertext, iv, signature) triple will get a duplicate-key
+    // error before the message is stored.
     iv: {
         type: String,
-        required: true
+        required: true,
+        unique: true
     },
-    // Dilithium digital signature over (encryptedContent + iv + timestamp) (base64)
+    // Dilithium signature over the transcript-bound payload (C4):
+    // "PQMSG-v1|<sender>|<recipient>|<iv>|<encryptedContent>"
     signature: {
         type: String,
         required: true
@@ -40,3 +45,4 @@ const MessageSchema = new mongoose.Schema({
 MessageSchema.index({ sender: 1, recipient: 1, createdAt: -1 });
 
 module.exports = mongoose.model('Message', MessageSchema);
+
