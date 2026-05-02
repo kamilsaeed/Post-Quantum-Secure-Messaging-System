@@ -1,6 +1,8 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
+const helmet = require('helmet');
+const rateLimit = require('express-rate-limit');
 const connectDB = require('./config/db');
 
 // Import route modules
@@ -15,8 +17,30 @@ const app = express();
 connectDB();
 
 // ============================================================
-// Middleware
+// Security Middleware
 // ============================================================
+
+// helmet — sets sensible HTTP security headers (CSP, HSTS, X-Frame-Options, etc.)
+app.use(helmet());
+
+// M8 — rate limiting: max 20 requests per minute per IP on /api
+const apiLimiter = rateLimit({
+    windowMs: 60 * 1000,   // 1 minute window
+    max: 120,              // max 120 requests per window
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { error: 'Too many requests, please try again later.' }
+});
+
+// Stricter limiter on registration to prevent username-spray
+const registerLimiter = rateLimit({
+    windowMs: 60 * 1000,
+    max: 5,
+    message: { error: 'Too many registration attempts. Please wait before trying again.' }
+});
+
+app.use('/api', apiLimiter);
+
 app.use(cors({
     origin: ['http://localhost:5173', 'http://localhost:3000'],
     methods: ['GET', 'POST', 'PATCH', 'DELETE'],
@@ -29,6 +53,7 @@ app.use(express.json({ limit: '10mb' })); // Large limit for base64 key payloads
 // ============================================================
 
 // Phase 2 — Key management & user registry (Member 2)
+app.use('/api/keys/register', registerLimiter); // stricter rate limit on registration
 app.use('/api/keys', keyRoutes);
 
 // Phase 2 — Kyber KEM handshake protocol (Member 2)
@@ -69,7 +94,7 @@ app.use((err, req, res, next) => {
 // Start the server
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
-    console.log(`\n🚀 Post-Quantum Secure Chat Server running on port ${PORT}`);
-    console.log(`📡 Algorithms: ML-KEM-768 (Kyber) + ML-DSA-65 (Dilithium) + AES-256-GCM`);
-    console.log(`🌐 API Health: http://localhost:${PORT}/\n`);
+    console.log(`\nPost-Quantum Secure Chat Server running on port ${PORT}`);
+    console.log(`Algorithms: ML-KEM-768 (Kyber) + ML-DSA-65 (Dilithium) + AES-256-GCM`);
+    console.log(`API Health: http://localhost:${PORT}/\n`);
 });

@@ -4,7 +4,7 @@
   "description": "",
   "main": "server.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "node testFlow.js",
     "start": "node server.js"
   },
   "keywords": [],
@@ -13,10 +13,12 @@
   "type": "commonjs",
   "dependencies": {
     "@noble/post-quantum": "^0.6.1",
-    "cors": "^2.8.6",
+    "cors": "^2.8.5",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
-    "mongodb": "^7.2.0",
+    "express-rate-limit": "^7.5.0",
+    "helmet": "^8.0.0",
     "mongoose": "^9.5.0"
   }
 }
+

@@ -18,14 +18,11 @@ const UserSchema = new mongoose.Schema({
         type: String,
         required: true
     },
-    // Online status tracking
-    isOnline: {
-        type: Boolean,
-        default: false
-    },
-    lastSeen: {
-        type: Date,
-        default: Date.now
+    // Opaque session token issued at registration (C6 — API authentication)
+    sessionToken: {
+        type: String,
+        required: true,
+        unique: true
     }
 }, { timestamps: true });
 
