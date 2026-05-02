@@ -129,11 +129,13 @@ export default function MetricsPanel({ onClose }) {
             const rawKey = crypto.getRandomValues(new Uint8Array(32));
             const aesKey = await crypto.subtle.importKey('raw', rawKey, { name: 'AES-GCM' }, false, ['encrypt', 'decrypt']);
             const plaintext = new TextEncoder().encode('Hello, post-quantum world! This is a test message for AES benchmarking.');
-            const iv = crypto.getRandomValues(new Uint8Array(12));
 
             const aesEncTimes = [];
             let cipherBuf;
             for (let i = 0; i < ROUNDS; i++) {
+                // M2 fix: generate a fresh random IV inside the loop — reusing the same IV
+                // with the same key and plaintext under AES-GCM reveals the keystream.
+                const iv = crypto.getRandomValues(new Uint8Array(12));
                 t0 = performance.now();
                 cipherBuf = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, aesKey, plaintext);
                 t1 = performance.now();
@@ -143,8 +145,11 @@ export default function MetricsPanel({ onClose }) {
 
             const aesDecTimes = [];
             for (let i = 0; i < ROUNDS; i++) {
+                // Decrypt with a fresh encrypt each iteration to keep IV consistent
+                const iv = crypto.getRandomValues(new Uint8Array(12));
+                const freshBuf = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, aesKey, plaintext);
                 t0 = performance.now();
-                await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, aesKey, cipherBuf);
+                await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, aesKey, freshBuf);
                 t1 = performance.now();
                 aesDecTimes.push(t1 - t0);
             }

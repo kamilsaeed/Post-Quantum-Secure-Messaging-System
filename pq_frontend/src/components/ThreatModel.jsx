@@ -44,16 +44,16 @@ export default function ThreatModel({ onClose }) {
             category: 'Man-in-the-Middle (Identity Spoofing)',
             adversaryCapability: 'Replaces public keys during transit, impersonates users',
             classicalMitigation: 'PKI certificates — depends on CA trust',
-            pqMitigation: 'ML-DSA-65 (Dilithium) signs all handshake ciphertexts. Recipient verifies identity before decapsulating.',
+            pqMitigation: 'ML-DSA-65 (Dilithium) signs all handshake ciphertexts with transcript binding (sender|recipient|ciphertext). Recipient verifies identity before decapsulating. Limitation: pubkey↔username mapping is TOFU — verify Safety Numbers out-of-band.',
             severity: 'critical',
-            status: 'mitigated',
+            status: 'partial',
         },
         {
             id: 'T5',
             category: 'Replay Attack',
             adversaryCapability: 'Re-sends old encrypted messages to impersonate user',
             classicalMitigation: 'Timestamps / sequence numbers',
-            pqMitigation: 'AES-GCM with fresh random IV per message. MongoDB timestamp verification. Signature over (ciphertext+IV) pair.',
+            pqMitigation: 'AES-GCM with fresh random IV per message (96-bit). Unique IV index on the database rejects exact-replay of any (ciphertext, IV, signature) triple. Signatures are transcript-bound (sender|recipient|IV|ciphertext), preventing cross-conversation replay.',
             severity: 'medium',
             status: 'mitigated',
         },
@@ -71,9 +71,9 @@ export default function ThreatModel({ onClose }) {
             category: 'Harvest Now, Decrypt Later (HNDL)',
             adversaryCapability: 'Adversary stores classical ciphertext to decrypt when quantum computers mature',
             classicalMitigation: 'None — classical systems are retroactively vulnerable',
-            pqMitigation: 'Forward-secure with ML-KEM-768. Stored ciphertexts cannot be broken even by future quantum computers.',
+            pqMitigation: 'ML-KEM-768 ciphertexts are quantum-resistant (LWE hardness). Stored ciphertexts cannot be broken by future quantum computers. Limitation: this system uses a static per-contact shared secret (not ephemeral per-session), so it does not provide perfect forward secrecy — compromise of the stored secret exposes all past messages.',
             severity: 'high',
-            status: 'mitigated',
+            status: 'partial',
         },
         {
             id: 'T8',
@@ -89,9 +89,10 @@ export default function ThreatModel({ onClose }) {
     const assumptions = [
         'The browser environment is trusted (client-side code integrity is assumed)',
         'MongoDB Atlas transport is TLS-protected (defense-in-depth)',
-        'localStorage is secure on the user\'s device (OS-level trust boundary)',
+        'localStorage is used to store private keys (base64, unencrypted). This is an explicit academic scope limitation — a production system would wrap keys with Argon2id + AES-GCM derived from a user passphrase.',
         'The @noble/post-quantum library correctly implements NIST FIPS 203/204 specifications',
         'The adversary has unlimited classical computational power and a quantum computer with sufficient qubits',
+        'Public key ↔ username mapping is TOFU (Trust-On-First-Use). Users should verify Safety Numbers out-of-band to detect a compromised server.',
     ];
 
     const severityColor = { critical: 'red', high: 'amber', medium: 'cyan', low: 'green' };
@@ -173,7 +174,10 @@ export default function ThreatModel({ onClose }) {
                                             <td className="threat-cell-text threat-classical">{t.classicalMitigation}</td>
                                             <td className="threat-cell-text threat-pq">{t.pqMitigation}</td>
                                             <td>
-                                                <span className="badge badge-green">✓ Mitigated</span>
+                                                {t.status === 'mitigated'
+                                                    ? <span className="badge badge-green">✓ Mitigated</span>
+                                                    : <span className="badge badge-amber">⚠ Partial</span>
+                                                }
                                             </td>
                                         </tr>
                                     ))}
