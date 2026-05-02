@@ -8,6 +8,20 @@ const api = axios.create({
     timeout: 15000,
 });
 
+/**
+ * C6 fix — Axios request interceptor:
+ * Attaches the session token (stored in localStorage after registration) as a
+ * Bearer token on every API call that requires authentication.
+ * The requireAuth middleware on the backend validates this token.
+ */
+api.interceptors.request.use((config) => {
+    const token = localStorage.getItem('pq_session_token');
+    if (token) {
+        config.headers['Authorization'] = `Bearer ${token}`;
+    }
+    return config;
+});
+
 // ============================================================
 // Key / User Registry  (Member 2 — Backend routes)
 // ============================================================
@@ -15,9 +29,14 @@ const api = axios.create({
 /**
  * Register a new user: sends both Dilithium + Kyber public keys.
  * Private keys are NEVER sent — they stay in the browser.
+ * The server returns a session token which is stored for subsequent API calls.
  */
 export const registerUser = async (username, dilithiumPublicKey, kyberPublicKey) => {
     const res = await api.post('/keys/register', { username, dilithiumPublicKey, kyberPublicKey });
+    // C6: persist the session token so the interceptor can attach it to future requests
+    if (res.data.sessionToken) {
+        localStorage.setItem('pq_session_token', res.data.sessionToken);
+    }
     return res.data;
 };
 
@@ -80,6 +99,15 @@ export const sendMessage = async (sender, recipient, encryptedContent, iv, signa
 /** Retrieve the full encrypted conversation between two users. */
 export const getConversation = async (userA, userB) => {
     const res = await api.get(`/messages/conversation/${userA}/${userB}`);
+    return res.data;
+};
+
+/**
+ * M9 fix: mark messages as read via the explicit endpoint.
+ * Called once when opening a chat, NOT on every poll.
+ */
+export const markMessagesRead = async (userA, userB) => {
+    const res = await api.patch(`/messages/read/${userA}/${userB}`);
     return res.data;
 };
 

@@ -34,16 +34,25 @@ export default function App() {
             if (hasDSAKey && hasKEMKey) {
                 setCurrentUser(saved);
             } else {
-                // Incomplete session — clear and start fresh
-                localStorage.clear();
+                // M4 fix: remove only pq_* keys, not unrelated localStorage data
+                for (const key of Object.keys(localStorage)) {
+                    if (key.startsWith('pq_')) localStorage.removeItem(key);
+                }
             }
         }
         setAppReady(true);
     }, []);
 
     const handleLogout = () => {
-        // Clear all cryptographic material from localStorage
-        localStorage.clear();
+        // M4 fix: remove only pq_* keys rather than wiping all localStorage
+        const keysToRemove = [
+            'pq_username', 'pq_dsa_private_key', 'pq_dsa_public_key',
+            'pq_kem_private_key', 'pq_kem_public_key', 'pq_session_token'
+        ];
+        // Also remove any per-contact shared secrets
+        for (const key of Object.keys(localStorage)) {
+            if (key.startsWith('pq_')) localStorage.removeItem(key);
+        }
         setCurrentUser(null);
     };
 

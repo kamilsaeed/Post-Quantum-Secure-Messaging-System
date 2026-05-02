@@ -129,20 +129,46 @@ export const decapsulateSecret = (ciphertextBase64, privateKeyBase64) => {
 // ============================================================
 
 /**
- * Derive an AES-256 key from the Kyber shared secret.
- * Uses SHA-256 to compress the shared secret into a 256-bit key.
- * 
+ * Derive an AES-256 key from the Kyber shared secret using HKDF (RFC 5869).
+ *
+ * C7 fix: replaces the bare SHA-256 digest with HKDF-Extract + HKDF-Expand so that:
+ *  - Domain separation is achieved via the `info` parameter
+ *  - The key is bound to the conversation participants (sender + recipient)
+ *  - A second key for a different purpose cannot accidentally collide
+ *
  * @param {string} sharedSecretBase64 - Kyber-derived shared secret
+ * @param {string} sender             - sender username (binds key to conversation)
+ * @param {string} recipient          - recipient username (binds key to conversation)
  * @returns {Promise<CryptoKey>} AES-GCM key
  */
-const deriveAESKey = async (sharedSecretBase64) => {
+const deriveAESKey = async (sharedSecretBase64, sender = '', recipient = '') => {
     const secretBytes = fromBase64(sharedSecretBase64);
-    // Hash the shared secret to produce a consistent 256-bit key
-    const keyMaterial = await crypto.subtle.digest('SHA-256', secretBytes);
-    return crypto.subtle.importKey(
+
+    // Import the raw shared secret as HKDF key material
+    const hkdfKey = await crypto.subtle.importKey(
         'raw',
-        keyMaterial,
-        { name: 'AES-GCM' },
+        secretBytes,
+        { name: 'HKDF' },
+        false,
+        ['deriveKey']
+    );
+
+    // Domain-separated info string: binds the derived key to its purpose and participants
+    const info = new TextEncoder().encode(
+        `PQMSG-v1/aes-key/${sender}/${recipient}`
+    );
+
+    // No salt → HKDF uses a zero-filled salt of hash length (SHA-256 → 32 zero bytes)
+    // This is standards-compliant per RFC 5869 §2.2.
+    return crypto.subtle.deriveKey(
+        {
+            name: 'HKDF',
+            hash: 'SHA-256',
+            salt: new Uint8Array(32), // 32-byte zero salt
+            info
+        },
+        hkdfKey,
+        { name: 'AES-GCM', length: 256 },
         false,
         ['encrypt', 'decrypt']
     );
@@ -150,13 +176,15 @@ const deriveAESKey = async (sharedSecretBase64) => {
 
 /**
  * Encrypt a plaintext message with AES-256-GCM.
- * 
- * @param {string} plaintext - The message to encrypt
+ *
+ * @param {string} plaintext          - The message to encrypt
  * @param {string} sharedSecretBase64 - Kyber-derived shared secret
+ * @param {string} sender             - sender username (for HKDF domain binding)
+ * @param {string} recipient          - recipient username (for HKDF domain binding)
  * @returns {Promise<{ encryptedContent: string, iv: string }>} base64 encoded
  */
-export const encryptMessage = async (plaintext, sharedSecretBase64) => {
-    const key = await deriveAESKey(sharedSecretBase64);
+export const encryptMessage = async (plaintext, sharedSecretBase64, sender = '', recipient = '') => {
+    const key = await deriveAESKey(sharedSecretBase64, sender, recipient);
     const iv = crypto.getRandomValues(new Uint8Array(12)); // 96-bit IV for GCM
     const plaintextBytes = new TextEncoder().encode(plaintext);
 
@@ -174,14 +202,16 @@ export const encryptMessage = async (plaintext, sharedSecretBase64) => {
 
 /**
  * Decrypt an AES-256-GCM encrypted message.
- * 
+ *
  * @param {string} encryptedContentBase64 - The ciphertext (base64)
- * @param {string} ivBase64 - The IV used during encryption (base64)
- * @param {string} sharedSecretBase64 - Kyber-derived shared secret
+ * @param {string} ivBase64               - The IV used during encryption (base64)
+ * @param {string} sharedSecretBase64     - Kyber-derived shared secret
+ * @param {string} sender                 - sender username (for HKDF domain binding)
+ * @param {string} recipient              - recipient username (for HKDF domain binding)
  * @returns {Promise<string>} - Decrypted plaintext
  */
-export const decryptMessage = async (encryptedContentBase64, ivBase64, sharedSecretBase64) => {
-    const key = await deriveAESKey(sharedSecretBase64);
+export const decryptMessage = async (encryptedContentBase64, ivBase64, sharedSecretBase64, sender = '', recipient = '') => {
+    const key = await deriveAESKey(sharedSecretBase64, sender, recipient);
     const ciphertextBytes = fromBase64(encryptedContentBase64);
     const iv = fromBase64(ivBase64);
 

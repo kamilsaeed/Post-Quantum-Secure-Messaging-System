@@ -6,6 +6,8 @@ import {
     verifySignature,
     encryptMessage,
     decryptMessage,
+    toBase64,
+    fromBase64,
 } from '../utils/crypto';
 import {
     getPublicKey,
@@ -16,6 +18,7 @@ import {
     sendMessage,
     getConversation,
     getUnreadCounts,
+    markMessagesRead,
 } from '../services/api';
 import './Chat.css';
 
@@ -23,60 +26,54 @@ import './Chat.css';
  * Member 3 (Frontend Developer) — Phase 3
  * Main Chat Interface
  *
- * Implements the full post-quantum secure communication protocol:
- * 1. Contact directory with online users
- * 2. Kyber KEM handshake (key exchange) per contact
- * 3. AES-256-GCM encrypted messaging using Kyber-derived shared secrets
- * 4. Dilithium signature verification on received messages
- * 5. Crypto activity log panel (for demo / QA)
+ * Fixes applied in this file:
+ *  C4 — Transcript binding: signatures now cover "PQMSG-v1|sender|recipient|iv|ciphertext"
+ *  C5 — Safety Number UI: shows SHA-256 fingerprint of both Dilithium public keys
+ *  M4 — localStorage.clear() replaced with explicit pq_* key removal
+ *  M9 — read-receipt called once on chat open via markMessagesRead, not on every poll
  */
 export default function Chat({ currentUser, onLogout }) {
     const [users, setUsers] = useState([]);
     const [selectedContact, setSelectedContact] = useState(null);
     const [messages, setMessages] = useState([]);
     const [newMessage, setNewMessage] = useState('');
-    const [handshakeStatus, setHandshakeStatus] = useState({}); // { contactName: 'none'|'pending'|'completed' }
-    const [sharedSecrets, setSharedSecrets] = useState({}); // { contactName: base64Secret }
-    const [decryptedMessages, setDecryptedMessages] = useState({}); // { messageId: plaintext }
-    const [verificationStatus, setVerificationStatus] = useState({}); // { messageId: bool }
+    const [handshakeStatus, setHandshakeStatus] = useState({});
+    const [sharedSecrets, setSharedSecrets] = useState({});
+    const [decryptedMessages, setDecryptedMessages] = useState({});
+    const [verificationStatus, setVerificationStatus] = useState({});
     const [unreadCounts, setUnreadCounts] = useState({});
     const [cryptoLog, setCryptoLog] = useState([]);
     const [showCryptoPanel, setShowCryptoPanel] = useState(false);
     const [sendingMessage, setSendingMessage] = useState(false);
     const [handshaking, setHandshaking] = useState(false);
     const [loadingMessages, setLoadingMessages] = useState(false);
+    // C5 — Safety Number state
+    const [safetyNumber, setSafetyNumber] = useState(null);
+    const [showSafetyNumber, setShowSafetyNumber] = useState(false);
 
-    // Load own keys from localStorage
     const myDSAPrivKey = localStorage.getItem('pq_dsa_private_key');
     const myKEMPrivKey = localStorage.getItem('pq_kem_private_key');
+    const myDSAPubKey  = localStorage.getItem('pq_dsa_public_key');
 
-    // ============================================================
-    // Crypto Activity Log Helper
-    // ============================================================
     const addLog = useCallback((type, message) => {
         const entry = { id: Date.now() + Math.random(), type, message, time: new Date().toLocaleTimeString() };
         setCryptoLog(prev => [entry, ...prev].slice(0, 50));
     }, []);
 
-    // ============================================================
-    // Load user list & pending handshakes on mount
-    // ============================================================
     useEffect(() => {
         loadUsers();
         loadPendingHandshakes();
         loadUnreadCounts();
 
-        // Poll for new messages and pending handshakes every 5 seconds
         const interval = setInterval(() => {
             loadPendingHandshakes();
             loadUnreadCounts();
-            if (selectedContact) loadMessages(selectedContact);
+            if (selectedContact) loadMessages(selectedContact, false); // false = don't re-mark as read
         }, 5000);
 
         return () => clearInterval(interval);
     }, [currentUser, selectedContact]);
 
-    // Load shared secrets from localStorage on mount
     useEffect(() => {
         const secrets = {};
         for (const key of Object.keys(localStorage)) {
@@ -106,40 +103,26 @@ export default function Chat({ currentUser, onLogout }) {
         }
     };
 
-    /**
-     * Poll for pending Kyber KEM handshakes and automatically
-     * decapsulate if we are the recipient (User B role).
-     */
     const loadPendingHandshakes = async () => {
         try {
             const data = await getPendingHandshakes(currentUser);
             for (const hs of data.handshakes) {
                 const contact = hs.initiator;
-
-                // Verify the Dilithium signature on the ciphertext
-                const sigValid = verifySignature(
-                    hs.kyberCiphertext,
-                    hs.signature,
-                    hs.initiatorDilithiumPublicKey
-                );
+                // C4 — verify signature over transcript-bound handshake payload
+                const transcriptPayload = `PQMSG-v1|handshake|${contact}|${currentUser}|${hs.kyberCiphertext}`;
+                const sigValid = verifySignature(transcriptPayload, hs.signature, hs.initiatorDilithiumPublicKey);
 
                 if (!sigValid) {
-                    addLog('error', `⚠️ Handshake from ${contact}: INVALID Dilithium signature! Rejected.`);
+                    addLog('error', `Handshake from ${contact}: INVALID Dilithium signature! Rejected.`);
                     continue;
                 }
+                addLog('verify', `Handshake from ${contact}: Dilithium signature verified.`);
 
-                addLog('verify', `✅ Handshake from ${contact}: Dilithium signature verified.`);
-
-                // Decapsulate the shared secret using our Kyber private key (User B)
                 const sharedSecret = decapsulateSecret(hs.kyberCiphertext, myKEMPrivKey);
-                const secretKey = `pq_secret_${contact}`;
-                localStorage.setItem(secretKey, sharedSecret);
+                localStorage.setItem(`pq_secret_${contact}`, sharedSecret);
                 setSharedSecrets(prev => ({ ...prev, [contact]: sharedSecret }));
                 setHandshakeStatus(prev => ({ ...prev, [contact]: 'completed' }));
-
-                addLog('kem', `🔑 Kyber KEM: Shared secret established with ${contact}. AES-256-GCM ready.`);
-
-                // Acknowledge completion to the server
+                addLog('kem', `Kyber KEM: Shared secret established with ${contact}.`);
                 await completeHandshake(hs._id);
             }
         } catch (err) {
@@ -147,50 +130,50 @@ export default function Chat({ currentUser, onLogout }) {
         }
     };
 
-    // ============================================================
-    // Select a contact and load conversation
-    // ============================================================
     const selectContact = async (contact) => {
         setSelectedContact(contact);
         setMessages([]);
         setDecryptedMessages({});
+        setSafetyNumber(null);
+        setShowSafetyNumber(false);
 
-        // Determine handshake status for this contact
         const secret = localStorage.getItem(`pq_secret_${contact}`);
-        if (secret) {
-            setHandshakeStatus(prev => ({ ...prev, [contact]: 'completed' }));
-        }
+        if (secret) setHandshakeStatus(prev => ({ ...prev, [contact]: 'completed' }));
 
-        await loadMessages(contact);
+        await loadMessages(contact, true); // true = mark as read on open (M9)
     };
 
-    const loadMessages = async (contact) => {
+    // M9 fix: markRead flag — only call markMessagesRead on initial open, not every poll
+    const loadMessages = async (contact, markRead = false) => {
         if (!contact) return;
         setLoadingMessages(true);
         try {
             const data = await getConversation(currentUser, contact);
             setMessages(data.messages || []);
 
-            // Decrypt and verify all messages
+            if (markRead) {
+                markMessagesRead(currentUser, contact).catch(() => {}); // fire-and-forget
+            }
+
             const secret = localStorage.getItem(`pq_secret_${contact}`);
             if (secret && data.messages.length > 0) {
                 const newDecrypted = {};
                 const newVerification = {};
 
                 for (const msg of data.messages) {
-                    // Determine whose public key to use for signature verification
                     const senderPubKey = data.publicKeys[msg.sender];
-
-                    // Verify Dilithium signature
-                    const signedData = msg.encryptedContent + msg.iv;
+                    // C4 — verify transcript-bound signature: "PQMSG-v1|sender|recipient|iv|ciphertext"
+                    const transcriptPayload = `PQMSG-v1|${msg.sender}|${msg.recipient}|${msg.iv}|${msg.encryptedContent}`;
                     const isValid = senderPubKey
-                        ? verifySignature(signedData, msg.signature, senderPubKey)
+                        ? verifySignature(transcriptPayload, msg.signature, senderPubKey)
                         : false;
                     newVerification[msg._id] = isValid;
 
-                    // Decrypt with AES-256-GCM
+                    // Determine HKDF participants: always [initiator, recipient] in a stable order
+                    const hkdfSender = msg.sender;
+                    const hkdfRecipient = msg.recipient;
                     try {
-                        const plaintext = await decryptMessage(msg.encryptedContent, msg.iv, secret);
+                        const plaintext = await decryptMessage(msg.encryptedContent, msg.iv, secret, hkdfSender, hkdfRecipient);
                         newDecrypted[msg._id] = plaintext;
                     } catch {
                         newDecrypted[msg._id] = '[Decryption failed — wrong shared secret]';
@@ -207,54 +190,43 @@ export default function Chat({ currentUser, onLogout }) {
         }
     };
 
-    // ============================================================
-    // Kyber KEM Handshake Initiation (User A role)
-    // ============================================================
     const initiateKyberHandshake = async (contact) => {
         setHandshaking(true);
-        addLog('kem', `🚀 Initiating Kyber KEM handshake with ${contact}...`);
+        addLog('kem', `Initiating Kyber KEM handshake with ${contact}...`);
 
         try {
-            // 1. Fetch the recipient's Kyber public key from the server
             const recipientKeys = await getPublicKey(contact);
-            addLog('kem', `📡 Fetched ${contact}'s Kyber public key from key server.`);
+            addLog('kem', `Fetched ${contact}'s Kyber public key from key server.`);
 
-            // 2. Encapsulate a shared secret using their Kyber public key
             const { ciphertext, sharedSecret } = encapsulateSecret(recipientKeys.kyberPublicKey);
-            addLog('kem', `🔒 ML-KEM-768: Encapsulated shared secret. Ciphertext size: ${Math.round(ciphertext.length * 0.75)} bytes.`);
+            addLog('kem', `ML-KEM-768: Encapsulated shared secret.`);
 
-            // 3. Sign the ciphertext with our Dilithium private key (prove authenticity)
-            const signature = signData(ciphertext, myDSAPrivKey);
-            addLog('sign', `✍️  ML-DSA-65: Signed Kyber ciphertext with our Dilithium private key.`);
+            // C4 — sign a transcript-bound handshake payload
+            const transcriptPayload = `PQMSG-v1|handshake|${currentUser}|${contact}|${ciphertext}`;
+            const signature = signData(transcriptPayload, myDSAPrivKey);
+            addLog('sign', `ML-DSA-65: Signed transcript-bound handshake payload.`);
 
-            // 4. Store the shared secret locally — it NEVER goes to the server
             localStorage.setItem(`pq_secret_${contact}`, sharedSecret);
             setSharedSecrets(prev => ({ ...prev, [contact]: sharedSecret }));
 
-            // 5. Send ciphertext + signature to the server for the recipient to fetch
             await initiateHandshake(currentUser, contact, ciphertext, signature);
             setHandshakeStatus(prev => ({ ...prev, [contact]: 'pending' }));
-            addLog('kem', `📤 Ciphertext stored on server. Waiting for ${contact} to decapsulate...`);
-            addLog('info', `🔐 AES-256-GCM will use SHA-256(sharedSecret) as the key material.`);
-
+            addLog('kem', `Ciphertext stored on server. Waiting for ${contact} to decapsulate...`);
         } catch (err) {
             console.error('Handshake error:', err);
-            addLog('error', `❌ Handshake failed: ${err.message}`);
+            addLog('error', `Handshake failed: ${err.message}`);
         } finally {
             setHandshaking(false);
         }
     };
 
-    // ============================================================
-    // Send an encrypted message
-    // ============================================================
     const handleSendMessage = async (e) => {
         e.preventDefault();
         if (!newMessage.trim() || !selectedContact) return;
 
         const secret = sharedSecrets[selectedContact];
         if (!secret) {
-            addLog('error', '❌ No shared secret. Initiate a handshake first.');
+            addLog('error', 'No shared secret. Initiate a handshake first.');
             return;
         }
 
@@ -263,55 +235,69 @@ export default function Chat({ currentUser, onLogout }) {
         setNewMessage('');
 
         try {
-            // 1. Encrypt with AES-256-GCM using the Kyber-derived shared secret
-            const { encryptedContent, iv } = await encryptMessage(plaintext, secret);
-            addLog('encrypt', `🔒 AES-256-GCM: Message encrypted (${plaintext.length} chars → ${Math.round(encryptedContent.length * 0.75)} bytes).`);
+            // C7 — pass sender/recipient so HKDF info string binds the key to this conversation
+            const { encryptedContent, iv } = await encryptMessage(plaintext, secret, currentUser, selectedContact);
+            addLog('encrypt', `AES-256-GCM: Message encrypted.`);
 
-            // 2. Sign the encrypted content + IV with Dilithium (authenticate the ciphertext)
-            const signedData = encryptedContent + iv;
-            const signature = signData(signedData, myDSAPrivKey);
-            addLog('sign', `✍️  ML-DSA-65: Signed ciphertext for message authentication.`);
+            // C4 — sign a transcript-bound message payload
+            const transcriptPayload = `PQMSG-v1|${currentUser}|${selectedContact}|${iv}|${encryptedContent}`;
+            const signature = signData(transcriptPayload, myDSAPrivKey);
+            addLog('sign', `ML-DSA-65: Signed transcript-bound message payload.`);
 
-            // 3. Send to server — server stores ONLY ciphertext, never plaintext
             await sendMessage(currentUser, selectedContact, encryptedContent, iv, signature);
-            addLog('info', `📤 Encrypted message sent to server. Server cannot read it.`);
+            addLog('info', `Encrypted message sent. Server cannot read it.`);
 
-            // 4. Reload conversation
-            await loadMessages(selectedContact);
-
+            await loadMessages(selectedContact, false);
         } catch (err) {
             console.error('Send message error:', err);
-            addLog('error', `❌ Send failed: ${err.message}`);
-            setNewMessage(plaintext); // Restore message on failure
+            addLog('error', `Send failed: ${err.message}`);
+            setNewMessage(plaintext);
         } finally {
             setSendingMessage(false);
         }
     };
 
-    // ============================================================
-    // Render helpers
-    // ============================================================
+    // C5 — compute Safety Number: SHA-256 of both Dilithium public keys concatenated
+    const computeSafetyNumber = async (contact) => {
+        try {
+            const contactKeys = await getPublicKey(contact);
+            const myPub = myDSAPubKey || '';
+            const theirPub = contactKeys.dilithiumPublicKey || '';
+
+            // Stable ordering: sort usernames alphabetically so both sides get the same number
+            const [first, second] = [currentUser, contact].sort();
+            const firstPub  = first  === currentUser ? myPub   : theirPub;
+            const secondPub = second === currentUser ? myPub   : theirPub;
+
+            const combined = new TextEncoder().encode(firstPub + secondPub);
+            const hashBuf  = await crypto.subtle.digest('SHA-256', combined);
+            const hashHex  = Array.from(new Uint8Array(hashBuf))
+                .map(b => b.toString(16).padStart(2, '0'))
+                .join('');
+
+            // Format as 8 groups of 8 hex chars for readability
+            const groups = hashHex.match(/.{8}/g) || [];
+            setSafetyNumber(groups.join(' '));
+            setShowSafetyNumber(true);
+        } catch (err) {
+            console.error('Safety number error:', err);
+        }
+    };
+
     const getHandshakeStatusForContact = (contact) => {
         if (sharedSecrets[contact]) return 'completed';
         return handshakeStatus[contact] || 'none';
     };
 
-    const formatTime = (dateStr) => {
-        return new Date(dateStr).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    };
+    const formatTime = (dateStr) =>
+        new Date(dateStr).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
     const logTypeColor = {
-        'kem': 'var(--accent-primary)',
-        'sign': 'var(--cyan)',
-        'encrypt': 'var(--green)',
-        'verify': 'var(--green)',
-        'info': 'var(--text-muted)',
-        'error': 'var(--red)',
+        kem: 'var(--accent-primary)', sign: 'var(--cyan)',
+        encrypt: 'var(--green)', verify: 'var(--green)',
+        info: 'var(--text-muted)', error: 'var(--red)',
     };
 
-    // ============================================================
-    // Render
-    // ============================================================
     return (
         <div className="chat-layout">
             {/* ── Sidebar ── */}
@@ -382,34 +368,25 @@ export default function Chat({ currentUser, onLogout }) {
                                             {hsStatus === 'completed' && <span className="hs-badge hs-done">🔒 E2E Encrypted</span>}
                                         </div>
                                     </div>
-                                    {unread > 0 && (
-                                        <div className="unread-badge">{unread}</div>
-                                    )}
+                                    {unread > 0 && <div className="unread-badge">{unread}</div>}
                                 </div>
                             );
                         })
                     )}
                 </div>
 
-                {/* Bottom sidebar actions */}
                 <div className="sidebar-footer">
-                    <button
-                        id="toggle-crypto-panel-btn"
-                        className="btn btn-ghost btn-sm"
+                    <button id="toggle-crypto-panel-btn" className="btn btn-ghost btn-sm"
                         style={{ width: '100%', justifyContent: 'flex-start' }}
-                        onClick={() => setShowCryptoPanel(p => !p)}
-                    >
+                        onClick={() => setShowCryptoPanel(p => !p)}>
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                             <rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/>
                         </svg>
                         Crypto Activity Log
                     </button>
-                    <button
-                        id="logout-btn"
-                        className="btn btn-danger btn-sm"
+                    <button id="logout-btn" className="btn btn-danger btn-sm"
                         style={{ width: '100%', justifyContent: 'flex-start' }}
-                        onClick={onLogout}
-                    >
+                        onClick={onLogout}>
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                             <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16,17 21,12 16,7"/><line x1="21" y1="12" x2="9" y2="12"/>
                         </svg>
@@ -441,9 +418,7 @@ export default function Chat({ currentUser, onLogout }) {
                         {/* Chat Header */}
                         <div className="chat-header">
                             <div className="chat-header-contact">
-                                <div className="chat-header-avatar">
-                                    {selectedContact[0].toUpperCase()}
-                                </div>
+                                <div className="chat-header-avatar">{selectedContact[0].toUpperCase()}</div>
                                 <div>
                                     <div className="chat-header-name">{selectedContact}</div>
                                     <div className="chat-header-status">
@@ -456,12 +431,8 @@ export default function Chat({ currentUser, onLogout }) {
                             </div>
                             <div className="chat-header-actions">
                                 {getHandshakeStatusForContact(selectedContact) === 'none' && (
-                                    <button
-                                        id={`handshake-btn-${selectedContact}`}
-                                        className="btn btn-primary btn-sm"
-                                        onClick={() => initiateKyberHandshake(selectedContact)}
-                                        disabled={handshaking}
-                                    >
+                                    <button id={`handshake-btn-${selectedContact}`} className="btn btn-primary btn-sm"
+                                        onClick={() => initiateKyberHandshake(selectedContact)} disabled={handshaking}>
                                         {handshaking ? <><span className="loading-spinner" /> Handshaking...</> : <>🤝 Kyber Handshake</>}
                                     </button>
                                 )}
@@ -469,10 +440,34 @@ export default function Chat({ currentUser, onLogout }) {
                                     <span className="badge badge-amber">⏳ Waiting for {selectedContact}...</span>
                                 )}
                                 {getHandshakeStatusForContact(selectedContact) === 'completed' && (
-                                    <span className="badge badge-green">🔒 PQ-Secure Channel</span>
+                                    <>
+                                        <span className="badge badge-green">🔒 PQ-Secure Channel</span>
+                                        {/* C5 — Safety Number button */}
+                                        <button id={`safety-number-btn-${selectedContact}`}
+                                            className="btn btn-ghost btn-sm"
+                                            onClick={() => computeSafetyNumber(selectedContact)}
+                                            title="Verify identity out-of-band (Safety Number)">
+                                            🔑 Safety Number
+                                        </button>
+                                    </>
                                 )}
                             </div>
                         </div>
+
+                        {/* C5 — Safety Number Panel */}
+                        {showSafetyNumber && safetyNumber && (
+                            <div className="safety-number-panel animate-fade-in">
+                                <div className="safety-number-header">
+                                    <strong>Safety Number with {selectedContact}</strong>
+                                    <button className="btn btn-ghost btn-icon btn-sm" onClick={() => setShowSafetyNumber(false)}>✕</button>
+                                </div>
+                                <code className="safety-number-code">{safetyNumber}</code>
+                                <p className="safety-number-hint">
+                                    Compare this number with {selectedContact} via a separate channel (call, in-person).
+                                    If it matches, your connection has not been intercepted. (TOFU identity verification)
+                                </p>
+                            </div>
+                        )}
 
                         {/* Messages */}
                         <div className="messages-container" id="messages-container">
@@ -481,7 +476,6 @@ export default function Chat({ currentUser, onLogout }) {
                                     <span className="loading-spinner" /> Loading encrypted messages...
                                 </div>
                             )}
-
                             {!loadingMessages && messages.length === 0 && (
                                 <div className="messages-empty">
                                     {getHandshakeStatusForContact(selectedContact) === 'completed'
@@ -490,34 +484,24 @@ export default function Chat({ currentUser, onLogout }) {
                                     }
                                 </div>
                             )}
-
                             {messages.map((msg) => {
                                 const isMine = msg.sender === currentUser;
                                 const plaintext = decryptedMessages[msg._id];
                                 const sigValid = verificationStatus[msg._id];
-
                                 return (
-                                    <div
-                                        key={msg._id}
-                                        className={`message-row ${isMine ? 'message-row-mine' : 'message-row-theirs'}`}
-                                    >
+                                    <div key={msg._id} className={`message-row ${isMine ? 'message-row-mine' : 'message-row-theirs'}`}>
                                         <div className={`message-bubble ${isMine ? 'message-bubble-mine' : 'message-bubble-theirs'}`}>
-                                            {/* Message content */}
                                             <div className="message-text">
                                                 {plaintext !== undefined
                                                     ? plaintext
                                                     : <span className="message-encrypted">🔒 [Encrypted — no shared secret]</span>
                                                 }
                                             </div>
-
-                                            {/* Message metadata */}
                                             <div className="message-meta">
                                                 <span className="message-time">{formatTime(msg.createdAt)}</span>
                                                 {sigValid !== undefined && (
-                                                    <span
-                                                        className={`message-sig ${sigValid ? 'sig-valid' : 'sig-invalid'}`}
-                                                        title={sigValid ? 'Dilithium signature verified' : 'Signature verification FAILED'}
-                                                    >
+                                                    <span className={`message-sig ${sigValid ? 'sig-valid' : 'sig-invalid'}`}
+                                                        title={sigValid ? 'Dilithium signature verified (transcript-bound)' : 'Signature verification FAILED'}>
                                                         {sigValid ? '✓ Signed' : '✗ Tampered'}
                                                     </span>
                                                 )}
@@ -531,36 +515,27 @@ export default function Chat({ currentUser, onLogout }) {
                         {/* Message Input */}
                         <form className="message-input-area" onSubmit={handleSendMessage}>
                             <div className="message-input-wrapper">
-                                <input
-                                    id="message-input"
-                                    type="text"
-                                    className="input-field message-input"
-                                    placeholder={
-                                        getHandshakeStatusForContact(selectedContact) === 'completed'
-                                            ? 'Type a message... (will be AES-256-GCM encrypted)'
-                                            : 'Initiate Kyber handshake to unlock messaging'
-                                    }
+                                <input id="message-input" type="text" className="input-field message-input"
+                                    placeholder={getHandshakeStatusForContact(selectedContact) === 'completed'
+                                        ? 'Type a message... (will be AES-256-GCM encrypted)'
+                                        : 'Initiate Kyber handshake to unlock messaging'}
                                     value={newMessage}
                                     onChange={(e) => setNewMessage(e.target.value)}
                                     disabled={getHandshakeStatusForContact(selectedContact) !== 'completed' || sendingMessage}
                                 />
-                                <button
-                                    id="send-message-btn"
-                                    type="submit"
-                                    className="btn btn-primary btn-icon send-btn"
-                                    disabled={!newMessage.trim() || getHandshakeStatusForContact(selectedContact) !== 'completed' || sendingMessage}
-                                >
+                                <button id="send-message-btn" type="submit" className="btn btn-primary btn-icon send-btn"
+                                    disabled={!newMessage.trim() || getHandshakeStatusForContact(selectedContact) !== 'completed' || sendingMessage}>
                                     {sendingMessage
                                         ? <span className="loading-spinner" />
                                         : <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                                             <line x1="22" y1="2" x2="11" y2="13" /><polygon points="22,2 15,22 11,13 2,9" />
-                                        </svg>
+                                          </svg>
                                     }
                                 </button>
                             </div>
                             <div className="message-input-hint">
                                 {getHandshakeStatusForContact(selectedContact) === 'completed' && (
-                                    <span>🔒 Messages encrypted with AES-256-GCM · Signed with ML-DSA-65 · Keys derived via ML-KEM-768</span>
+                                    <span>🔒 AES-256-GCM · ML-DSA-65 (transcript-bound) · ML-KEM-768</span>
                                 )}
                             </div>
                         </form>
@@ -568,31 +543,23 @@ export default function Chat({ currentUser, onLogout }) {
                 )}
             </main>
 
-            {/* ── Crypto Activity Panel (QA / Demo) ── */}
+            {/* ── Crypto Activity Panel ── */}
             {showCryptoPanel && (
                 <aside className="crypto-panel animate-slide-in-right">
                     <div className="crypto-panel-header">
                         <h3>Crypto Activity Log</h3>
                         <span className="badge badge-cyan">Live</span>
-                        <button
-                            className="btn btn-ghost btn-icon"
-                            onClick={() => setShowCryptoPanel(false)}
-                        >
+                        <button className="btn btn-ghost btn-icon" onClick={() => setShowCryptoPanel(false)}>
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                                 <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
                             </svg>
                         </button>
                     </div>
-                    <div className="crypto-panel-subtitle">
-                        Member 4 (QA) — Real-time cryptographic operation trace
-                    </div>
+                    <div className="crypto-panel-subtitle">Member 4 (QA) — Real-time cryptographic operation trace</div>
                     <div className="crypto-log">
-                        {cryptoLog.length === 0 ? (
-                            <div className="crypto-log-empty">
-                                Crypto operations will appear here as you interact.
-                            </div>
-                        ) : (
-                            cryptoLog.map(entry => (
+                        {cryptoLog.length === 0
+                            ? <div className="crypto-log-empty">Crypto operations will appear here as you interact.</div>
+                            : cryptoLog.map(entry => (
                                 <div key={entry.id} className="crypto-log-entry animate-fade-in">
                                     <span className="crypto-log-time">{entry.time}</span>
                                     <span className="crypto-log-msg" style={{ color: logTypeColor[entry.type] || 'var(--text-secondary)' }}>
@@ -600,7 +567,7 @@ export default function Chat({ currentUser, onLogout }) {
                                     </span>
                                 </div>
                             ))
-                        )}
+                        }
                     </div>
                 </aside>
             )}
