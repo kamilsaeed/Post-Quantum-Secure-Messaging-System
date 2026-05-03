@@ -1,6 +1,14 @@
 import { ml_kem768 } from '@noble/post-quantum/ml-kem.js';
 import { ml_dsa65 } from '@noble/post-quantum/ml-dsa.js';
 
+/** ML-KEM-768 (@noble/post-quantum): encapsulation key / decapsulation key sizes */
+const ML_KEM768_PK_LEN = 1184;
+const ML_KEM768_SK_LEN = 2400;
+
+/** ML-DSA-65: verification key / signing key sizes (same as MetricsPanel expectations) */
+const ML_DSA65_PK_LEN = 1952;
+const ML_DSA65_SK_LEN = 4032;
+
 // ============================================================
 // Base64 <-> Uint8Array helpers (browser-native, no Buffer)
 // ============================================================
@@ -19,10 +27,33 @@ export const toBase64 = (uint8Array) => {
 };
 
 /**
+ * Normalize base64 from APIs / storage: trim, strip whitespace, URL-safe → standard, pad.
+ */
+const normalizeBase64 = (input) => {
+    if (input == null || typeof input !== 'string') {
+        throw new Error('Key material is missing or not a string (check API response and localStorage).');
+    }
+    let s = input.trim().replace(/\s/g, '').replace(/-/g, '+').replace(/_/g, '/');
+    const pad = s.length % 4;
+    if (pad) s += '='.repeat(4 - pad);
+    return s;
+};
+
+/**
  * Convert a base64 string back to a Uint8Array.
  */
-export const fromBase64 = (base64) =>
-    Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
+export const fromBase64 = (base64) => {
+    const s = normalizeBase64(base64);
+    try {
+        return Uint8Array.from(atob(s), (c) => c.charCodeAt(0));
+    } catch {
+        throw new Error(
+            'Invalid Base64 key data (atob failed). Often caused by truncated keys, copy/paste corruption, ' +
+                'or non-Base64 text in the Kyber/Dilithium fields. Clear site data and register again, ' +
+                'and ensure MongoDB stores full Base64 strings.'
+        );
+    }
+};
 
 // ============================================================
 // Member 3 (Frontend) — Phase 3
@@ -53,7 +84,14 @@ export const generateIdentity = () => {
 export const signData = (message, privateKeyBase64) => {
     const msgBytes = new TextEncoder().encode(message);
     const skBytes = fromBase64(privateKeyBase64);
-    const signature = ml_dsa65.sign(skBytes, msgBytes);
+    if (skBytes.length !== ML_DSA65_SK_LEN) {
+        throw new Error(
+            `Invalid Dilithium private key: decoded ${skBytes.length} bytes (expected ${ML_DSA65_SK_LEN}). ` +
+                'Your pq_dsa_private_key in localStorage is corrupt or truncated. Log out, clear site data for this origin, and register again.'
+        );
+    }
+    // @noble/post-quantum API: sign(message, secretKey) — not (secretKey, message)
+    const signature = ml_dsa65.sign(msgBytes, skBytes);
     return toBase64(signature);
 };
 
@@ -70,7 +108,9 @@ export const verifySignature = (message, signatureBase64, publicKeyBase64) => {
         const msgBytes = new TextEncoder().encode(message);
         const sigBytes = fromBase64(signatureBase64);
         const pkBytes = fromBase64(publicKeyBase64);
-        return ml_dsa65.verify(pkBytes, msgBytes, sigBytes);
+        if (pkBytes.length !== ML_DSA65_PK_LEN) return false;
+        // @noble/post-quantum API: verify(signature, message, publicKey)
+        return ml_dsa65.verify(sigBytes, msgBytes, pkBytes);
     } catch {
         return false;
     }
@@ -102,6 +142,13 @@ export const generateKEMKeys = () => {
  */
 export const encapsulateSecret = (recipientPublicKeyBase64) => {
     const pkBytes = fromBase64(recipientPublicKeyBase64);
+    if (pkBytes.length !== ML_KEM768_PK_LEN) {
+        throw new Error(
+            `Invalid Kyber public key: decoded ${pkBytes.length} bytes (expected ${ML_KEM768_PK_LEN} for ML-KEM-768). ` +
+                'Common causes: contact registered before Kyber was required, Dilithium key mistakenly stored as Kyber in MongoDB, ' +
+                'or truncated Base64. Fix: delete that user in DB or re-register with a new username, then retry handshake.'
+        );
+    }
     const { cipherText, sharedSecret } = ml_kem768.encapsulate(pkBytes);
     return {
         ciphertext: toBase64(cipherText),
@@ -120,6 +167,12 @@ export const encapsulateSecret = (recipientPublicKeyBase64) => {
 export const decapsulateSecret = (ciphertextBase64, privateKeyBase64) => {
     const cipherBytes = fromBase64(ciphertextBase64);
     const skBytes = fromBase64(privateKeyBase64);
+    if (skBytes.length !== ML_KEM768_SK_LEN) {
+        throw new Error(
+            `Invalid Kyber private key: decoded ${skBytes.length} bytes (expected ${ML_KEM768_SK_LEN}). ` +
+                'Your pq_kem_private_key in localStorage is corrupt or truncated. Log out, clear site data, and register again.'
+        );
+    }
     const sharedSecret = ml_kem768.decapsulate(cipherBytes, skBytes);
     return toBase64(sharedSecret);
 };

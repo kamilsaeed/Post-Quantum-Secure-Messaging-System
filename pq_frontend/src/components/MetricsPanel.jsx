@@ -102,7 +102,7 @@ export default function MetricsPanel({ onClose }) {
             const dsaSignTimes = [];
             for (let i = 0; i < ROUNDS; i++) {
                 t0 = performance.now();
-                sig = ml_dsa65.sign(dsaKeys.secretKey, msg);
+                sig = ml_dsa65.sign(msg, dsaKeys.secretKey);
                 t1 = performance.now();
                 dsaSignTimes.push(t1 - t0);
             }
@@ -112,7 +112,7 @@ export default function MetricsPanel({ onClose }) {
             const dsaVerifyTimes = [];
             for (let i = 0; i < ROUNDS; i++) {
                 t0 = performance.now();
-                ml_dsa65.verify(dsaKeys.publicKey, msg, sig);
+                ml_dsa65.verify(sig, msg, dsaKeys.publicKey);
                 t1 = performance.now();
                 dsaVerifyTimes.push(t1 - t0);
             }
@@ -169,8 +169,8 @@ export default function MetricsPanel({ onClose }) {
 
             const dsaKeys2 = ml_dsa65.keygen();
             const testMsg = new TextEncoder().encode('correctness-test');
-            const testSig = ml_dsa65.sign(dsaKeys2.secretKey, testMsg);
-            results.dsaCorrect = ml_dsa65.verify(dsaKeys2.publicKey, testMsg, testSig);
+            const testSig = ml_dsa65.sign(testMsg, dsaKeys2.secretKey);
+            results.dsaCorrect = ml_dsa65.verify(testSig, testMsg, dsaKeys2.publicKey);
 
             setProgress('Done!');
             setBenchmarks(results);

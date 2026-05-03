@@ -2,6 +2,12 @@
 
 This is a MERN-stack communication system that is secure against quantum-computer adversaries using lattice-based cryptography. It integrates ML-KEM-768 (Kyber) for post-quantum key exchange, ML-DSA-65 (Dilithium) for digital signatures, and AES-256-GCM for symmetric messaging.
 
+## Full Technical Documentation
+
+For complete architecture, API reference, cryptographic workflow, security controls, and testing guidance, see:
+
+- [Technical Documentation](./TECHNICAL_DOCUMENTATION.md)
+
 ## Requirements
 
 You must have **Node.js** and **npm** installed on your system to run this project.
