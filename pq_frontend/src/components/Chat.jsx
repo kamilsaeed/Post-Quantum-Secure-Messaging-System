@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
     encapsulateSecret,
     decapsulateSecret,
@@ -6,8 +6,6 @@ import {
     verifySignature,
     encryptMessage,
     decryptMessage,
-    toBase64,
-    fromBase64,
 } from '../utils/crypto';
 import {
     getPublicKey,
@@ -28,7 +26,16 @@ export default function Chat({ currentUser, onLogout }) {
     const [messages, setMessages] = useState([]);
     const [newMessage, setNewMessage] = useState('');
     const [handshakeStatus, setHandshakeStatus] = useState({});
-    const [sharedSecrets, setSharedSecrets] = useState({});
+    const [sharedSecrets, setSharedSecrets] = useState(() => {
+        const secrets = {};
+        for (const key of Object.keys(localStorage)) {
+            if (key.startsWith('pq_secret_')) {
+                const contact = key.replace('pq_secret_', '');
+                secrets[contact] = localStorage.getItem(key);
+            }
+        }
+        return secrets;
+    });
     const [decryptedMessages, setDecryptedMessages] = useState({});
     const [verificationStatus, setVerificationStatus] = useState({});
     const [unreadCounts, setUnreadCounts] = useState({});
@@ -39,6 +46,7 @@ export default function Chat({ currentUser, onLogout }) {
     const [loadingMessages, setLoadingMessages] = useState(false);
     const [safetyNumber, setSafetyNumber] = useState(null);
     const [showSafetyNumber, setShowSafetyNumber] = useState(false);
+    const messagesEndRef = useRef(null);
 
     const myDSAPrivKey = localStorage.getItem('pq_dsa_private_key');
     const myKEMPrivKey = localStorage.getItem('pq_kem_private_key');
@@ -49,50 +57,25 @@ export default function Chat({ currentUser, onLogout }) {
         setCryptoLog(prev => [entry, ...prev].slice(0, 50));
     }, []);
 
-    useEffect(() => {
-        loadUsers();
-        loadPendingHandshakes();
-        loadUnreadCounts();
-
-        const interval = setInterval(() => {
-            loadPendingHandshakes();
-            loadUnreadCounts();
-            if (selectedContact) loadMessages(selectedContact, false);
-        }, 5000);
-
-        return () => clearInterval(interval);
-    }, [currentUser, selectedContact]);
-
-    useEffect(() => {
-        const secrets = {};
-        for (const key of Object.keys(localStorage)) {
-            if (key.startsWith('pq_secret_')) {
-                const contact = key.replace('pq_secret_', '');
-                secrets[contact] = localStorage.getItem(key);
-            }
-        }
-        setSharedSecrets(secrets);
-    }, []);
-
-    const loadUsers = async () => {
+    const loadUsers = useCallback(async () => {
         try {
             const data = await getUsers();
             setUsers(data.users.filter(u => u.username !== currentUser));
         } catch (err) {
             console.error('Failed to load users:', err);
         }
-    };
+    }, [currentUser]);
 
-    const loadUnreadCounts = async () => {
+    const loadUnreadCounts = useCallback(async () => {
         try {
             const data = await getUnreadCounts(currentUser);
             setUnreadCounts(data.unread || {});
         } catch (err) {
             console.error('Failed to load unread counts:', err);
         }
-    };
+    }, [currentUser]);
 
-    const loadPendingHandshakes = async () => {
+    const loadPendingHandshakes = useCallback(async () => {
         try {
             const data = await getPendingHandshakes(currentUser);
             for (const hs of data.handshakes) {
@@ -116,7 +99,7 @@ export default function Chat({ currentUser, onLogout }) {
         } catch (err) {
             console.error('Handshake poll error:', err);
         }
-    };
+    }, [addLog, currentUser, myKEMPrivKey]);
 
     const selectContact = async (contact) => {
         setSelectedContact(contact);
@@ -127,19 +110,24 @@ export default function Chat({ currentUser, onLogout }) {
 
         const secret = localStorage.getItem(`pq_secret_${contact}`);
         if (secret) setHandshakeStatus(prev => ({ ...prev, [contact]: 'completed' }));
+        setUnreadCounts(prev => ({ ...prev, [contact]: 0 }));
 
-        await loadMessages(contact, true);
+        await loadMessages(contact, { markRead: true, showLoader: true });
     };
 
-    const loadMessages = async (contact, markRead = false) => {
+    const loadMessages = useCallback(async (contact, options = {}) => {
         if (!contact) return;
-        setLoadingMessages(true);
+        const { markRead = false, showLoader = false } =
+            typeof options === 'boolean' ? { markRead: options, showLoader: true } : options;
+
+        if (showLoader) setLoadingMessages(true);
         try {
             const data = await getConversation(currentUser, contact);
             setMessages(data.messages || []);
 
             if (markRead) {
                 markMessagesRead(currentUser, contact).catch(() => {});
+                setUnreadCounts(prev => ({ ...prev, [contact]: 0 }));
             }
 
             const secret = localStorage.getItem(`pq_secret_${contact}`);
@@ -171,9 +159,36 @@ export default function Chat({ currentUser, onLogout }) {
         } catch (err) {
             console.error('Load messages error:', err);
         } finally {
-            setLoadingMessages(false);
+            if (showLoader) setLoadingMessages(false);
         }
-    };
+    }, [currentUser]);
+
+    useEffect(() => {
+        let isActive = true;
+
+        const refreshChatState = () => {
+            if (!isActive) return;
+            loadPendingHandshakes();
+            loadUnreadCounts();
+            if (selectedContact) loadMessages(selectedContact, { markRead: true, showLoader: false });
+        };
+
+        const initialTimer = setTimeout(() => {
+            if (!isActive) return;
+            loadUsers();
+            refreshChatState();
+        }, 0);
+
+        const interval = setInterval(() => {
+            refreshChatState();
+        }, 5000);
+
+        return () => {
+            isActive = false;
+            clearTimeout(initialTimer);
+            clearInterval(interval);
+        };
+    }, [loadMessages, loadPendingHandshakes, loadUnreadCounts, loadUsers, selectedContact]);
 
     const initiateKyberHandshake = async (contact) => {
         setHandshaking(true);
@@ -229,7 +244,7 @@ export default function Chat({ currentUser, onLogout }) {
             await sendMessage(currentUser, selectedContact, encryptedContent, iv, signature);
             addLog('info', `Encrypted message sent. Server cannot read it.`);
 
-            await loadMessages(selectedContact, false);
+            await loadMessages(selectedContact, { showLoader: false });
         } catch (err) {
             console.error('Send message error:', err);
             addLog('error', `Send failed: ${err.message}`);
@@ -270,6 +285,20 @@ export default function Chat({ currentUser, onLogout }) {
 
     const formatTime = (dateStr) =>
         new Date(dateStr).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+    const sortedUsers = useMemo(() => {
+        return users
+            .map((user, index) => ({ ...user, index }))
+            .sort((a, b) => {
+                const unreadDiff = (unreadCounts[b.username] || 0) - (unreadCounts[a.username] || 0);
+                if (unreadDiff !== 0) return unreadDiff;
+                return a.index - b.index;
+            });
+    }, [users, unreadCounts]);
+
+    useEffect(() => {
+        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+    }, [messages.length, selectedContact]);
 
     const logTypeColor = {
         kem: 'var(--accent-primary)', sign: 'var(--cyan)',
@@ -322,14 +351,14 @@ export default function Chat({ currentUser, onLogout }) {
                             <br /><small>Open another browser tab to register.</small>
                         </div>
                     ) : (
-                        users.map(user => {
+                        sortedUsers.map(user => {
                             const hsStatus = getHandshakeStatusForContact(user.username);
                             const unread = unreadCounts[user.username] || 0;
                             return (
                                 <div
                                     key={user.username}
                                     id={`contact-${user.username}`}
-                                    className={`contact-item ${selectedContact === user.username ? 'contact-item-active' : ''}`}
+                                    className={`contact-item ${selectedContact === user.username ? 'contact-item-active' : ''} ${unread > 0 ? 'contact-item-unread' : ''}`}
                                     onClick={() => selectContact(user.username)}
                                 >
                                     <div className="contact-avatar">
@@ -483,6 +512,7 @@ export default function Chat({ currentUser, onLogout }) {
                                     </div>
                                 );
                             })}
+                            <div ref={messagesEndRef} />
                         </div>
 
                         <form className="message-input-area" onSubmit={handleSendMessage}>
