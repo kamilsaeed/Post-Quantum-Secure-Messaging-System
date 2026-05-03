@@ -3,16 +3,6 @@ import { generateIdentity, generateKEMKeys } from '../utils/crypto';
 import { registerUser } from '../services/api';
 import './Register.css';
 
-/**
- * Member 3 (Frontend Developer) — Phase 3
- * Registration Screen
- *
- * Responsibilities:
- * 1. Generate ML-DSA-65 (Dilithium) key pair for digital signatures
- * 2. Generate ML-KEM-768 (Kyber) key pair for key encapsulation
- * 3. Store BOTH private keys in localStorage (they never leave the browser)
- * 4. Upload BOTH public keys to the server via /api/keys/register
- */
 export default function Register({ onRegisterSuccess }) {
     const [username, setUsername] = useState('');
     const [status, setStatus] = useState(null);
@@ -28,34 +18,28 @@ export default function Register({ onRegisterSuccess }) {
         setStatus({ type: 'info', text: '🔑 Generating ML-DSA-65 (Dilithium) key pair...' });
 
         try {
-            // Step 1: Generate Dilithium identity keys (for signing)
             const identityKeys = generateIdentity();
             setStatus({ type: 'info', text: '🔐 Generating ML-KEM-768 (Kyber) key pair...' });
-            await new Promise(r => setTimeout(r, 200)); // Let UI update
+            await new Promise(r => setTimeout(r, 200));
 
-            // Step 2: Generate Kyber KEM keys (for key exchange)
             const kemKeys = generateKEMKeys();
             setStatus({ type: 'info', text: '💾 Storing private keys securely in browser...' });
             await new Promise(r => setTimeout(r, 200));
 
-            // Step 3: Store private keys locally — they NEVER leave the browser
             localStorage.setItem('pq_username', username.toLowerCase());
             localStorage.setItem('pq_dsa_private_key', identityKeys.privateKey);
             localStorage.setItem('pq_dsa_public_key', identityKeys.publicKey);
             localStorage.setItem('pq_kem_private_key', kemKeys.privateKey);
             localStorage.setItem('pq_kem_public_key', kemKeys.publicKey);
-            // Shared secrets will be stored per-contact: pq_secret_<contact>
 
             setStatus({ type: 'info', text: '📡 Uploading public keys to server...' });
 
-            // Step 4: Register public keys on the server
             await registerUser(
                 username.toLowerCase(),
                 identityKeys.publicKey,
                 kemKeys.publicKey
             );
 
-            // Show a preview of generated keys for educational purposes
             setGeneratedKeys({
                 dilithiumPubKey: identityKeys.publicKey.substring(0, 64) + '...',
                 kyberPubKey: kemKeys.publicKey.substring(0, 64) + '...',
@@ -82,12 +66,10 @@ export default function Register({ onRegisterSuccess }) {
 
     return (
         <div className="register-wrapper">
-            {/* Background glow effects */}
             <div className="register-glow register-glow-1" />
             <div className="register-glow register-glow-2" />
 
             <div className="register-container animate-fade-in">
-                {/* Logo / Header */}
                 <div className="register-header">
                     <div className="register-logo">
                         <svg width="40" height="40" viewBox="0 0 40 40" fill="none">
@@ -108,7 +90,6 @@ export default function Register({ onRegisterSuccess }) {
                     </div>
                 </div>
 
-                {/* Algorithm badges */}
                 <div className="register-badges">
                     <span className="badge badge-purple">ML-KEM-768</span>
                     <span className="badge badge-cyan">ML-DSA-65</span>
@@ -120,7 +101,6 @@ export default function Register({ onRegisterSuccess }) {
                     Private keys are generated locally and never leave your device.
                 </p>
 
-                {/* Registration Form */}
                 <form onSubmit={handleRegister} className="register-form">
                     <div className="form-group">
                         <label className="form-label">Username</label>
@@ -160,14 +140,12 @@ export default function Register({ onRegisterSuccess }) {
                     </button>
                 </form>
 
-                {/* Status Message */}
                 {status && (
                     <div className={`register-status register-status-${status.type} animate-fade-in`}>
                         {status.text}
                     </div>
                 )}
 
-                {/* Key Preview (educational) */}
                 {generatedKeys && (
                     <div className="key-preview animate-fade-in">
                         <div className="key-preview-title">
@@ -187,7 +165,6 @@ export default function Register({ onRegisterSuccess }) {
                     </div>
                 )}
 
-                {/* Threat Model Note */}
                 <div className="register-threat-note">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                         <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />

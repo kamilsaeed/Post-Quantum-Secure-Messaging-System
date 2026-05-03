@@ -1,15 +1,5 @@
 import './ThreatModel.css';
 
-/**
- * Member 1 (System Architect & Security Lead) — Phase 1 & 4
- * Formal Threat Model Panel
- *
- * Displays:
- * - Dolev-Yao Adversary Model
- * - Quantum Threat Analysis (Shor's & Grover's algorithms)
- * - Attack Surface Mitigation Mapping
- * - Data Flow Security Analysis
- */
 export default function ThreatModel({ onClose }) {
     const threats = [
         {
@@ -108,7 +98,8 @@ export default function ThreatModel({ onClose }) {
                             </svg>
                             Formal Threat Model
                         </h2>
-                        <p className="threat-subtitle">Member 1 — Dolev-Yao + Quantum Adversary Analysis</p>
+                        <p className="threat-subtitle">
+                            Dolev-Yao + Quantum Adversary Analysis</p>
                     </div>
                     <button className="btn btn-ghost btn-icon" onClick={onClose}>
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -118,7 +109,6 @@ export default function ThreatModel({ onClose }) {
                 </div>
 
                 <div className="threat-modal-body">
-                    {/* Adversary Definition */}
                     <section className="threat-section">
                         <h3 className="threat-section-title">Adversary Capabilities (Combined Model)</h3>
                         <div className="threat-assumption-grid">
@@ -147,7 +137,6 @@ export default function ThreatModel({ onClose }) {
                         </div>
                     </section>
 
-                    {/* Threat Table */}
                     <section className="threat-section">
                         <h3 className="threat-section-title">Threat Catalog &amp; Mitigations</h3>
                         <div className="threat-table-wrapper">
@@ -186,7 +175,6 @@ export default function ThreatModel({ onClose }) {
                         </div>
                     </section>
 
-                    {/* Trust Assumptions */}
                     <section className="threat-section">
                         <h3 className="threat-section-title">Security Assumptions</h3>
                         <ul className="assumption-list">
@@ -199,7 +187,6 @@ export default function ThreatModel({ onClose }) {
                         </ul>
                     </section>
 
-                    {/* Data Flow */}
                     <section className="threat-section">
                         <h3 className="threat-section-title">Security Boundary Analysis</h3>
                         <div className="dataflow-grid">

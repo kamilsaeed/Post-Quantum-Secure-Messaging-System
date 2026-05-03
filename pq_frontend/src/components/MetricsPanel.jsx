@@ -1,18 +1,6 @@
 import { useState, useEffect } from 'react';
 import './MetricsPanel.css';
 
-/**
- * Member 4 (QA & Integration Engineer) — Phase 4 & 5
- * Security Metrics & Performance Dashboard
- *
- * Runs live benchmarks of:
- * - ML-KEM-768 (Kyber) key generation, encapsulation, decapsulation
- * - ML-DSA-65 (Dilithium) key generation, sign, verify
- * - AES-256-GCM encrypt / decrypt
- *
- * Also evaluates Security vs. Usability trade-offs and
- * displays key size comparisons (classical vs. post-quantum).
- */
 export default function MetricsPanel({ onClose }) {
     const [benchmarks, setBenchmarks] = useState(null);
     const [running, setRunning] = useState(false);
@@ -24,7 +12,6 @@ export default function MetricsPanel({ onClose }) {
         const results = {};
 
         try {
-            // Dynamically import to avoid blocking render
             const { ml_kem768 } = await import('@noble/post-quantum/ml-kem.js');
             const { ml_dsa65 } = await import('@noble/post-quantum/ml-dsa.js');
 
@@ -39,13 +26,11 @@ export default function MetricsPanel({ onClose }) {
 
             const ROUNDS = 5;
 
-            // ── ML-KEM-768 Benchmarks ──────────────────────────────
             setProgress('Benchmarking ML-KEM-768 (Kyber)...');
             await new Promise(r => setTimeout(r, 50));
 
             let t0, t1, kemKeys, encap;
 
-            // KEM KeyGen
             const kemKeygenTimes = [];
             for (let i = 0; i < ROUNDS; i++) {
                 t0 = performance.now();
@@ -55,7 +40,6 @@ export default function MetricsPanel({ onClose }) {
             }
             results.kemKeygen = avg(kemKeygenTimes);
 
-            // KEM Encapsulate
             const kemEncapTimes = [];
             for (let i = 0; i < ROUNDS; i++) {
                 t0 = performance.now();
@@ -65,7 +49,6 @@ export default function MetricsPanel({ onClose }) {
             }
             results.kemEncap = avg(kemEncapTimes);
 
-            // KEM Decapsulate
             const kemDecapTimes = [];
             for (let i = 0; i < ROUNDS; i++) {
                 t0 = performance.now();
@@ -75,20 +58,17 @@ export default function MetricsPanel({ onClose }) {
             }
             results.kemDecap = avg(kemDecapTimes);
 
-            // Key sizes
             results.kemPubKeyBytes = kemKeys.publicKey.length;
             results.kemPrivKeyBytes = kemKeys.secretKey.length;
             results.kemCiphertextBytes = encap.cipherText.length;
             results.kemSharedSecretBytes = encap.sharedSecret.length;
 
-            // ── ML-DSA-65 Benchmarks ───────────────────────────────
             setProgress('Benchmarking ML-DSA-65 (Dilithium)...');
             await new Promise(r => setTimeout(r, 50));
 
             let dsaKeys, sig;
             const msg = new TextEncoder().encode('QuantumShield benchmark message for signing test.');
 
-            // DSA KeyGen
             const dsaKeygenTimes = [];
             for (let i = 0; i < ROUNDS; i++) {
                 t0 = performance.now();
@@ -98,7 +78,6 @@ export default function MetricsPanel({ onClose }) {
             }
             results.dsaKeygen = avg(dsaKeygenTimes);
 
-            // DSA Sign
             const dsaSignTimes = [];
             for (let i = 0; i < ROUNDS; i++) {
                 t0 = performance.now();
@@ -108,7 +87,6 @@ export default function MetricsPanel({ onClose }) {
             }
             results.dsaSign = avg(dsaSignTimes);
 
-            // DSA Verify
             const dsaVerifyTimes = [];
             for (let i = 0; i < ROUNDS; i++) {
                 t0 = performance.now();
@@ -122,7 +100,6 @@ export default function MetricsPanel({ onClose }) {
             results.dsaPrivKeyBytes = dsaKeys.secretKey.length;
             results.dsaSigBytes = sig.length;
 
-            // ── AES-256-GCM Benchmarks ─────────────────────────────
             setProgress('Benchmarking AES-256-GCM...');
             await new Promise(r => setTimeout(r, 50));
 
@@ -133,8 +110,7 @@ export default function MetricsPanel({ onClose }) {
             const aesEncTimes = [];
             let cipherBuf;
             for (let i = 0; i < ROUNDS; i++) {
-                // M2 fix: generate a fresh random IV inside the loop — reusing the same IV
-                // with the same key and plaintext under AES-GCM reveals the keystream.
+                // AES-GCM: new random IV each encrypt; reusing IV+key+plaintext leaks keystream.
                 const iv = crypto.getRandomValues(new Uint8Array(12));
                 t0 = performance.now();
                 cipherBuf = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, aesKey, plaintext);
@@ -145,7 +121,6 @@ export default function MetricsPanel({ onClose }) {
 
             const aesDecTimes = [];
             for (let i = 0; i < ROUNDS; i++) {
-                // Decrypt with a fresh encrypt each iteration to keep IV consistent
                 const iv = crypto.getRandomValues(new Uint8Array(12));
                 const freshBuf = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, aesKey, plaintext);
                 t0 = performance.now();
@@ -158,7 +133,6 @@ export default function MetricsPanel({ onClose }) {
             results.aesKeyBytes = 32;
             results.aesIvBytes = 12;
 
-            // ── Correctness Verification ───────────────────────────
             setProgress('Verifying correctness...');
             await new Promise(r => setTimeout(r, 50));
 
@@ -216,7 +190,7 @@ export default function MetricsPanel({ onClose }) {
                             </svg>
                             QA Metrics &amp; Security Evaluation
                         </h2>
-                        <p className="metrics-subtitle">Member 4 — Performance Benchmarks &amp; Security/Usability Trade-off Analysis</p>
+                        <p className="metrics-subtitle">Performance Benchmarks &amp; Security/Usability Trade-off Analysis</p>
                     </div>
                     <button className="btn btn-ghost btn-icon" onClick={onClose}>
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -226,7 +200,6 @@ export default function MetricsPanel({ onClose }) {
                 </div>
 
                 <div className="metrics-modal-body">
-                    {/* Run Benchmarks */}
                     <div className="metrics-bench-header">
                         <div>
                             <h3 className="metrics-section-title">Live Browser Benchmarks</h3>
@@ -246,7 +219,6 @@ export default function MetricsPanel({ onClose }) {
 
                     {benchmarks && (
                         <div className="metrics-bench-grid">
-                            {/* ML-KEM-768 Card */}
                             <div className="metrics-card">
                                 <div className="metrics-card-header">
                                     <span className="badge badge-purple">ML-KEM-768 (Kyber)</span>
@@ -288,7 +260,6 @@ export default function MetricsPanel({ onClose }) {
                                 </div>
                             </div>
 
-                            {/* ML-DSA-65 Card */}
                             <div className="metrics-card">
                                 <div className="metrics-card-header">
                                     <span className="badge badge-cyan">ML-DSA-65 (Dilithium)</span>
@@ -326,7 +297,6 @@ export default function MetricsPanel({ onClose }) {
                                 </div>
                             </div>
 
-                            {/* AES-256-GCM Card */}
                             <div className="metrics-card">
                                 <div className="metrics-card-header">
                                     <span className="badge badge-green">AES-256-GCM</span>
@@ -363,7 +333,6 @@ export default function MetricsPanel({ onClose }) {
                         </div>
                     )}
 
-                    {/* Key Size Comparison */}
                     <section>
                         <h3 className="metrics-section-title">Key Size Comparison: Classical vs. Post-Quantum</h3>
                         <div className="metrics-table-wrapper">
@@ -398,7 +367,6 @@ export default function MetricsPanel({ onClose }) {
                         </div>
                     </section>
 
-                    {/* Security vs. Usability Trade-offs */}
                     <section>
                         <h3 className="metrics-section-title">Security vs. Usability Trade-off Analysis</h3>
                         <div className="tradeoff-table-wrapper">
@@ -429,7 +397,6 @@ export default function MetricsPanel({ onClose }) {
                         </div>
                     </section>
 
-                    {/* NIST Standards Reference */}
                     <section className="metrics-standards">
                         <h3 className="metrics-section-title">NIST Post-Quantum Standards Reference</h3>
                         <div className="standards-grid">

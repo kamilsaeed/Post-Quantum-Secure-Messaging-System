@@ -22,16 +22,6 @@ import {
 } from '../services/api';
 import './Chat.css';
 
-/**
- * Member 3 (Frontend Developer) — Phase 3
- * Main Chat Interface
- *
- * Fixes applied in this file:
- *  C4 — Transcript binding: signatures now cover "PQMSG-v1|sender|recipient|iv|ciphertext"
- *  C5 — Safety Number UI: shows SHA-256 fingerprint of both Dilithium public keys
- *  M4 — localStorage.clear() replaced with explicit pq_* key removal
- *  M9 — read-receipt called once on chat open via markMessagesRead, not on every poll
- */
 export default function Chat({ currentUser, onLogout }) {
     const [users, setUsers] = useState([]);
     const [selectedContact, setSelectedContact] = useState(null);
@@ -47,7 +37,6 @@ export default function Chat({ currentUser, onLogout }) {
     const [sendingMessage, setSendingMessage] = useState(false);
     const [handshaking, setHandshaking] = useState(false);
     const [loadingMessages, setLoadingMessages] = useState(false);
-    // C5 — Safety Number state
     const [safetyNumber, setSafetyNumber] = useState(null);
     const [showSafetyNumber, setShowSafetyNumber] = useState(false);
 
@@ -68,7 +57,7 @@ export default function Chat({ currentUser, onLogout }) {
         const interval = setInterval(() => {
             loadPendingHandshakes();
             loadUnreadCounts();
-            if (selectedContact) loadMessages(selectedContact, false); // false = don't re-mark as read
+            if (selectedContact) loadMessages(selectedContact, false);
         }, 5000);
 
         return () => clearInterval(interval);
@@ -108,7 +97,6 @@ export default function Chat({ currentUser, onLogout }) {
             const data = await getPendingHandshakes(currentUser);
             for (const hs of data.handshakes) {
                 const contact = hs.initiator;
-                // C4 — verify signature over transcript-bound handshake payload
                 const transcriptPayload = `PQMSG-v1|handshake|${contact}|${currentUser}|${hs.kyberCiphertext}`;
                 const sigValid = verifySignature(transcriptPayload, hs.signature, hs.initiatorDilithiumPublicKey);
 
@@ -140,10 +128,9 @@ export default function Chat({ currentUser, onLogout }) {
         const secret = localStorage.getItem(`pq_secret_${contact}`);
         if (secret) setHandshakeStatus(prev => ({ ...prev, [contact]: 'completed' }));
 
-        await loadMessages(contact, true); // true = mark as read on open (M9)
+        await loadMessages(contact, true);
     };
 
-    // M9 fix: markRead flag — only call markMessagesRead on initial open, not every poll
     const loadMessages = async (contact, markRead = false) => {
         if (!contact) return;
         setLoadingMessages(true);
@@ -152,7 +139,7 @@ export default function Chat({ currentUser, onLogout }) {
             setMessages(data.messages || []);
 
             if (markRead) {
-                markMessagesRead(currentUser, contact).catch(() => {}); // fire-and-forget
+                markMessagesRead(currentUser, contact).catch(() => {});
             }
 
             const secret = localStorage.getItem(`pq_secret_${contact}`);
@@ -162,14 +149,12 @@ export default function Chat({ currentUser, onLogout }) {
 
                 for (const msg of data.messages) {
                     const senderPubKey = data.publicKeys[msg.sender];
-                    // C4 — verify transcript-bound signature: "PQMSG-v1|sender|recipient|iv|ciphertext"
                     const transcriptPayload = `PQMSG-v1|${msg.sender}|${msg.recipient}|${msg.iv}|${msg.encryptedContent}`;
                     const isValid = senderPubKey
                         ? verifySignature(transcriptPayload, msg.signature, senderPubKey)
                         : false;
                     newVerification[msg._id] = isValid;
 
-                    // Determine HKDF participants: always [initiator, recipient] in a stable order
                     const hkdfSender = msg.sender;
                     const hkdfRecipient = msg.recipient;
                     try {
@@ -201,7 +186,6 @@ export default function Chat({ currentUser, onLogout }) {
             const { ciphertext, sharedSecret } = encapsulateSecret(recipientKeys.kyberPublicKey);
             addLog('kem', `ML-KEM-768: Encapsulated shared secret.`);
 
-            // C4 — sign a transcript-bound handshake payload
             const transcriptPayload = `PQMSG-v1|handshake|${currentUser}|${contact}|${ciphertext}`;
             const signature = signData(transcriptPayload, myDSAPrivKey);
             addLog('sign', `ML-DSA-65: Signed transcript-bound handshake payload.`);
@@ -235,11 +219,9 @@ export default function Chat({ currentUser, onLogout }) {
         setNewMessage('');
 
         try {
-            // C7 — pass sender/recipient so HKDF info string binds the key to this conversation
             const { encryptedContent, iv } = await encryptMessage(plaintext, secret, currentUser, selectedContact);
             addLog('encrypt', `AES-256-GCM: Message encrypted.`);
 
-            // C4 — sign a transcript-bound message payload
             const transcriptPayload = `PQMSG-v1|${currentUser}|${selectedContact}|${iv}|${encryptedContent}`;
             const signature = signData(transcriptPayload, myDSAPrivKey);
             addLog('sign', `ML-DSA-65: Signed transcript-bound message payload.`);
@@ -257,14 +239,12 @@ export default function Chat({ currentUser, onLogout }) {
         }
     };
 
-    // C5 — compute Safety Number: SHA-256 of both Dilithium public keys concatenated
     const computeSafetyNumber = async (contact) => {
         try {
             const contactKeys = await getPublicKey(contact);
             const myPub = myDSAPubKey || '';
             const theirPub = contactKeys.dilithiumPublicKey || '';
 
-            // Stable ordering: sort usernames alphabetically so both sides get the same number
             const [first, second] = [currentUser, contact].sort();
             const firstPub  = first  === currentUser ? myPub   : theirPub;
             const secondPub = second === currentUser ? myPub   : theirPub;
@@ -275,7 +255,6 @@ export default function Chat({ currentUser, onLogout }) {
                 .map(b => b.toString(16).padStart(2, '0'))
                 .join('');
 
-            // Format as 8 groups of 8 hex chars for readability
             const groups = hashHex.match(/.{8}/g) || [];
             setSafetyNumber(groups.join(' '));
             setShowSafetyNumber(true);
@@ -300,7 +279,6 @@ export default function Chat({ currentUser, onLogout }) {
 
     return (
         <div className="chat-layout">
-            {/* ── Sidebar ── */}
             <aside className="chat-sidebar">
                 <div className="sidebar-header">
                     <div className="sidebar-logo">
@@ -395,7 +373,6 @@ export default function Chat({ currentUser, onLogout }) {
                 </div>
             </aside>
 
-            {/* ── Main Chat Area ── */}
             <main className="chat-main">
                 {!selectedContact ? (
                     <div className="chat-empty-state">
@@ -415,7 +392,6 @@ export default function Chat({ currentUser, onLogout }) {
                     </div>
                 ) : (
                     <>
-                        {/* Chat Header */}
                         <div className="chat-header">
                             <div className="chat-header-contact">
                                 <div className="chat-header-avatar">{selectedContact[0].toUpperCase()}</div>
@@ -442,7 +418,6 @@ export default function Chat({ currentUser, onLogout }) {
                                 {getHandshakeStatusForContact(selectedContact) === 'completed' && (
                                     <>
                                         <span className="badge badge-green">🔒 PQ-Secure Channel</span>
-                                        {/* C5 — Safety Number button */}
                                         <button id={`safety-number-btn-${selectedContact}`}
                                             className="btn btn-ghost btn-sm"
                                             onClick={() => computeSafetyNumber(selectedContact)}
@@ -454,7 +429,6 @@ export default function Chat({ currentUser, onLogout }) {
                             </div>
                         </div>
 
-                        {/* C5 — Safety Number Panel */}
                         {showSafetyNumber && safetyNumber && (
                             <div className="safety-number-panel animate-fade-in">
                                 <div className="safety-number-header">
@@ -469,7 +443,6 @@ export default function Chat({ currentUser, onLogout }) {
                             </div>
                         )}
 
-                        {/* Messages */}
                         <div className="messages-container" id="messages-container">
                             {loadingMessages && (
                                 <div className="messages-loading">
@@ -512,7 +485,6 @@ export default function Chat({ currentUser, onLogout }) {
                             })}
                         </div>
 
-                        {/* Message Input */}
                         <form className="message-input-area" onSubmit={handleSendMessage}>
                             <div className="message-input-wrapper">
                                 <input id="message-input" type="text" className="input-field message-input"
@@ -543,7 +515,6 @@ export default function Chat({ currentUser, onLogout }) {
                 )}
             </main>
 
-            {/* ── Crypto Activity Panel ── */}
             {showCryptoPanel && (
                 <aside className="crypto-panel animate-slide-in-right">
                     <div className="crypto-panel-header">
@@ -555,7 +526,7 @@ export default function Chat({ currentUser, onLogout }) {
                             </svg>
                         </button>
                     </div>
-                    <div className="crypto-panel-subtitle">Member 4 (QA) — Real-time cryptographic operation trace</div>
+                    <div className="crypto-panel-subtitle">Real-time cryptographic operation trace</div>
                     <div className="crypto-log">
                         {cryptoLog.length === 0
                             ? <div className="crypto-log-empty">Crypto operations will appear here as you interact.</div>
